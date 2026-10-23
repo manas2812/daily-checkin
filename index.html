@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Check-in – a simulated Alexa+ experience for caring for loved ones</title>
+<style>
+:root{--bg:#eef3fa;--ink:#1b2a49;--muted:#566580;--ring:#2f7de1;--card:#fff;--line:#d3deee;--ok:#2e8b57;--warn:#c9831a;--bad:#c8433a}
+@media (prefers-color-scheme:dark){:root{--bg:#10192b;--ink:#eaf0fb;--muted:#9fb0cb;--card:#18243b;--line:#2a3a58;--ring:#5a9cf0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.5 Georgia,serif;display:flex;justify-content:center;min-height:100vh}
+main{width:100%;max-width:580px;padding:18px 16px 40px;display:flex;flex-direction:column;gap:14px}
+h1{font:700 26px/1.2 "Trebuchet MS",system-ui,sans-serif;margin:0}
+h2{font:700 20px "Trebuchet MS",system-ui,sans-serif;margin:0}
+.sub{color:var(--muted);margin:4px 0 0;font-size:15px}
+.tabs{display:flex;gap:8px}
+.tabs button{flex:1;text-align:center}
+.tabs button[aria-selected=true]{background:var(--ring);color:#fff}
+button{font:600 18px "Trebuchet MS",system-ui,sans-serif;padding:14px;border-radius:14px;border:2px solid var(--ring);background:var(--card);color:var(--ink);cursor:pointer;text-align:left}
+button:hover{background:var(--ring);color:#fff}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.stage{display:flex;align-items:center;gap:14px}
+.ring{flex:none;width:60px;height:60px;border-radius:50%;border:6px solid var(--ring)}
+.ring.talk{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(47,125,225,.5)}50%{transform:scale(1.08);box-shadow:0 0 0 14px rgba(47,125,225,0)}}
+@media (prefers-reduced-motion:reduce){.ring.talk{animation:none}}
+.say{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;font-size:20px;flex:1}
+.chips{display:flex;flex-direction:column;gap:10px}
+label.v{font:14px "Trebuchet MS",system-ui,sans-serif;color:var(--muted);display:flex;gap:6px;align-items:center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+.alert{border-left:8px solid var(--ok)}
+.alert.warn{border-left-color:var(--warn)}
+.alert.bad{border-left-color:var(--bad)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid .k{font:13px "Trebuchet MS",system-ui,sans-serif;color:var(--muted)}
+.grid .val{font:700 19px "Trebuchet MS",system-ui,sans-serif}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:16px}
+.hint{font:14px "Trebuchet MS",system-ui,sans-serif;color:var(--muted)}
+.row{display:flex;gap:10px}
+.row button{flex:1;text-align:center}
+#chat{display:flex;flex-direction:column;gap:10px;min-height:200px;margin:14px 0}
+.msg{padding:12px 15px;border-radius:16px;max-width:86%;background:var(--card);border:1px solid var(--line);font-size:19px}
+.msg.me{align-self:flex-end;background:var(--ring);color:#fff;border-color:var(--ring);font-family:"Trebuchet MS",system-ui,sans-serif}
+.msg.typing{color:var(--muted);font-size:15px;font-style:italic}
+form{display:flex;gap:8px;margin-top:12px}
+form input{flex:1;min-width:0;font:18px "Trebuchet MS",system-ui,sans-serif;padding:12px;border-radius:14px;border:2px solid var(--line);background:var(--card);color:var(--ink)}
+form button{text-align:center;padding:12px 14px}
+#mic.on{background:var(--bad);color:#fff;border-color:var(--bad)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Daily Check-in</h1>
+    <p class="sub">A simulated Alexa+ skill that checks in with a loved one and keeps their family informed.</p>
+  </header>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="t1" aria-selected="true">Grandma's check-in</button>
+    <button role="tab" id="t2" aria-selected="false">Family view</button>
+  </div>
+
+  <section id="elder">
+    <div class="stage">
+      <div class="ring" id="ring" aria-hidden="true"></div>
+      <div><h2>Alexa</h2><p class="sub">Talk or type, just like a chat with a friend.</p></div>
+    </div>
+    <div id="chat" aria-live="polite"></div>
+    <div class="chips" id="chips"></div>
+    <form id="form">
+      <input id="txt" placeholder="Type your reply…" autocomplete="off" aria-label="Your reply">
+      <button type="button" id="mic" aria-label="Speak your reply">🎤</button>
+      <button type="submit">Send</button>
+    </form>
+    <label class="v" style="margin-top:12px"><input type="checkbox" id="voice" checked> Speak aloud</label>
+  </section>
+
+  <section id="family" hidden>
+    <div class="card alert" id="banner"><h2 id="bTitle">No check-in yet today</h2><p id="bText" class="sub"></p></div>
+    <div class="grid" id="facts" style="margin:12px 0" hidden></div>
+    <div class="row" id="actions" hidden>
+      <button id="callBtn">Call Grandma</button>
+      <button id="okBtn">Send a hug</button>
+    </div>
+    <p id="toast" class="hint" aria-live="polite"></p>
+    <h2 style="margin:14px 0 8px">Recent check-ins</h2>
+    <ul class="hist" id="hist"></ul>
+    <button id="reset" style="margin-top:14px">Reset demo data</button>
+  </section>
+
+  <p class="hint">Simulation only. This page imitates an Alexa+ conversation in the browser and is not a medical device or connected to Amazon. In an emergency, call your local emergency number.</p>
+</main>
+<script>
+// ---- Edit these to personalise the demo ----
+const ELDER = "Grandma", FAMILY = "Riya";
+
+// Each step: key, what Alexa asks, the answers, and how worrying each answer is (0 fine, 1 note, 2 alert)
+const STEPS = [
+  {k:"sleep", label:"Sleep", q:"How did you sleep last night?", a:["Very well","Not so well"], w:[0,1],
+   kw:[[1,/not|bad|poor|restless|awake|couldn't|didn't|terrible/],[0,/well|good|great|fine|nice|peace|ok/]],
+   r:["That's lovely to hear. A good night's rest makes the whole day brighter.","Oh, I'm sorry about that. Let's make today a gentle one."]},
+  {k:"medicine", label:"Medicine", q:"Did you take your morning medicine?", a:["Yes, I did","Not yet","I forgot"], w:[0,1,2],
+   kw:[[2,/forgot|forget|missed|skip/],[1,/not yet|later|haven't|have not|not|no\b/],[0,/yes|yeah|took|taken|done|already|did/]],
+   r:["Wonderful, that's one thing done.","No problem. Please take it a little later, and I'll let Riya know.","That's alright, it happens to everyone. Please check your medicine instructions, or ask your doctor what to do about a missed dose."]},
+  {k:"mood", label:"Feeling", q:"And how are you feeling today?", a:["I feel great","I'm okay","I'm not feeling well"], w:[0,0,2],
+   kw:[[2,/not (feeling )?(well|good|great)|bad|sick|unwell|pain|hurt|dizzy|tired|weak|terrible|awful|ill\b|breath|chest/],[1,/okay|ok\b|alright|so-so|fine|manageable/],[0,/great|good|well|happy|wonderful|fantastic|better/]],
+   r:["I'm so glad! Your smile must be lighting up the house.","Alright, a calm day is a good day.","Oh dear, I'm sorry you're not feeling well. I'll tell Riya right away. If it gets worse, please call your doctor or emergency services."]},
+  {k:"water", label:"Food and water", q:"Have you had some water and something to eat?", a:["Yes, both","Only water","Not yet"], w:[0,1,1],
+   kw:[[2,/not yet|haven't|have not|nothing|no\b|not/],[0,/both|yes|\bate\b|eaten|breakfast|lunch|dinner|food/],[1,/water|tea/]],
+   r:["Lovely, you're taking good care of yourself.","Good, water is important. Do try to have a little something to eat too.","Oh, please have some water and a little food soon. It really helps."]},
+  {k:"need", label:"Needs", q:"Last one. Is there anything you need today?", a:["Nothing, thank you","Some groceries","A doctor's visit","I'd like a chat"], w:[0,1,2,1],
+   kw:[[2,/doctor|hospital|clinic|appointment|checkup/],[1,/grocer|vegetable|milk|shop|fruit|supplies/],[3,/chat|talk|lonely|company|alone|miss/],[0,/nothing|nope|no\b|fine|all good|i'm good|nah/]],
+   r:["Wonderful, then I'll let you enjoy your day.","I'll pass that on to Riya so she can sort it out.","I'll tell Riya so she can help arrange it.","Of course. I'll let Riya know, and I'm always happy to chat."]}
+];
+
+const $ = id => document.getElementById(id);
+let step = 0, today = {};
+
+function load(){ try { return JSON.parse(localStorage.getItem("checkins") || "[]"); } catch(e){ return []; } }
+function save(list){ try { localStorage.setItem("checkins", JSON.stringify(list)); } catch(e){} }
+
+let fails = 0;
+const AFTER = ["Do the check-in again", "Show what " + FAMILY + " sees"];
+const chat = $("chat");
+
+function bubble(text, who){
+  const d = document.createElement("div");
+  d.className = "msg " + who; d.textContent = text;
+  chat.appendChild(d); d.scrollIntoView({block:"nearest"});
+}
+function speak(text){
+  if ($("voice").checked && "speechSynthesis" in window){
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.onstart = () => $("ring").classList.add("talk");
+    u.onend = u.onerror = () => $("ring").classList.remove("talk");
+    speechSynthesis.speak(u);
+  }
+}
+// Alexa "types" for a moment before replying, like a real person would
+function say(text, after){
+  const t = document.createElement("div");
+  t.className = "msg typing"; t.textContent = "Alexa is typing…";
+  chat.appendChild(t); t.scrollIntoView({block:"nearest"});
+  setTimeout(() => { t.remove(); bubble(text, "bot"); speak(text); if (after) after(); }, 700 + Math.min(text.length * 12, 900));
+}
+function options(labels){
+  const box = $("chips"); box.innerHTML = "";
+  labels.forEach(t => { const b = document.createElement("button"); b.textContent = t; b.onclick = () => hear(t); box.appendChild(b); });
+}
+
+function begin(){
+  chat.innerHTML = ""; $("chips").innerHTML = ""; step = 0; fails = 0; today = {answers:{}, score:0};
+  const h = new Date().getHours();
+  const hello = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  say(hello + ", " + ELDER + "! It's lovely to hear from you. " + STEPS[0].q, () => options(STEPS[0].a));
+}
+
+// Alexa listens: works for typed text, spoken words, or a tapped button
+function hear(text){
+  text = text.trim(); if (!text) return;
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  bubble(text, "me"); $("chips").innerHTML = ""; $("txt").value = "";
+  if (step >= STEPS.length){
+    if (/again|restart|redo/i.test(text)) return begin();
+    if (/riya|family|see/i.test(text)) return show("family");
+    return say("Thank you, " + ELDER + ". You can check in again any time.", () => options(AFTER));
+  }
+  const s = STEPS[step], low = text.toLowerCase();
+  let idx = -1;
+  for (const [n, re] of s.kw) if (re.test(low)) { idx = n; break; }
+  if (idx < 0){
+    fails++;
+    return say(fails === 1 ? "Sorry, I didn't quite catch that. Could you say it another way, or tap an answer?" : "No worries, just tap the one that fits best.", () => options(s.a));
+  }
+  fails = 0;
+  today.answers[s.k] = s.a[idx]; today.score = Math.max(today.score, s.w[idx]);
+  step++;
+  if (step < STEPS.length) say(s.r[idx] + " " + STEPS[step].q, () => options(STEPS[step].a));
+  else finish(s.r[idx]);
+}
+function finish(reply){
+  today.time = new Date().toLocaleString([], {weekday:"short", hour:"2-digit", minute:"2-digit"});
+  const list = load(); list.unshift(today); save(list.slice(0, 7));
+  say(reply + " " + (today.score === 0 ? "I've let " + FAMILY + " know you're doing well. Have a lovely day, " + ELDER + "!" : "I've let " + FAMILY + " know, and they'll be in touch soon, " + ELDER + "."), () => options(AFTER));
+  render();
+}
+
+$("form").onsubmit = e => { e.preventDefault(); hear($("txt").value); };
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SR){
+  const rec = new SR(); rec.lang = "en-US";
+  rec.onresult = e => hear(e.results[0][0].transcript);
+  rec.onend = () => $("mic").classList.remove("on");
+  $("mic").onclick = () => { if ("speechSynthesis" in window) speechSynthesis.cancel(); $("mic").classList.add("on"); try { rec.start(); } catch(err){} };
+} else { $("mic").hidden = true; }
+
+function render(){
+  const list = load(), t = list[0], b = $("banner");
+  $("facts").hidden = $("actions").hidden = !t;
+  if (t){
+    b.className = "card alert " + ["", "warn", "bad"][t.score];
+    $("bTitle").textContent = t.score === 2 ? ELDER + " may need you today" : t.score === 1 ? "A few small things to note" : ELDER + " is doing well today";
+    const notes = STEPS.filter(s => t.answers[s.k] && s.w[s.a.indexOf(t.answers[s.k])] > 0).map(s => s.label.toLowerCase() + ": " + t.answers[s.k].toLowerCase());
+    $("bText").textContent = notes.length ? "Worth a look: " + notes.join("; ") + "." : "Everything looks fine. Checked in " + t.time + ".";
+    $("facts").innerHTML = STEPS.map(s => '<div class="card"><div class="k">' + s.label + '</div><div class="val">' + (t.answers[s.k] || "–") + '</div></div>').join("");
+  } else {
+    b.className = "card alert"; $("bTitle").textContent = "No check-in yet today";
+    $("bText").textContent = "Open " + ELDER + "'s check-in and answer the questions.";
+  }
+  $("hist").innerHTML = list.length ? list.map(c => '<li class="card">' + c.time + " — " + ["All good", "Minor notes", "Needs attention"][c.score] + "</li>").join("") : '<li class="hint">Nothing yet. Complete a check-in to see it here.</li>';
+}
+$("callBtn").onclick = () => $("toast").textContent = "Calling " + ELDER + "… (demo only)";
+$("okBtn").onclick = () => $("toast").textContent = "A hug was sent to " + ELDER + "'s Echo. (demo only)";
+$("reset").onclick = () => { save([]); render(); $("toast").textContent = "Demo data cleared."; };
+
+function show(which){
+  $("elder").hidden = which !== "elder"; $("family").hidden = which !== "family";
+  $("t1").setAttribute("aria-selected", which === "elder"); $("t2").setAttribute("aria-selected", which === "family");
+  if (which === "family") { if ("speechSynthesis" in window) speechSynthesis.cancel(); render(); }
+}
+$("t1").onclick = () => show("elder"); $("t2").onclick = () => show("family");
+begin(); render();
+</script>
+</body>
+</html>
